@@ -1,18 +1,15 @@
-import {Data_a_api_Input, Data_a_api_Output} from "./a_io";
+import {Data_a_api_Input, Data_a_api_Output} from "./io";
 
 export function f_from_api(a_api:Data_a_api_Input):Data_a_api_Output {
 	const c_stops = [];
 	const c_ur_routes = [];
-	for (let i1 in a_api.station) {
-		c_stops.push({
-			"stop_id": a_api.station[i1].id,
-			"stop_name": a_api.station[i1].name,
-			"stop_lat": a_api.station[i1].lat,
-			"stop_lon": a_api.station[i1].lon//,
-		});
+	for (let stop of a_api.station) {
+		c_stops.push(stop.clone());
 	}
-	for (let i1 in a_api.route) {
-		const c_stop_array = [];
+	for (let m_route of a_api.route) {
+		const route=m_route.clone();
+
+
 		for (let i2 = 0; i2 < a_api.route[i1].stationList.length; i2++) {
 			c_stop_array.push({"stop_id": a_api.route[i1].stationList[i2]});
 		}

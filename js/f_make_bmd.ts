@@ -7,7 +7,7 @@
 //統合はstop_nameで行う（緯度経度から位置を確認すべきか？）
 //親も一応用意する
 
-import {Calendar, Station, ApiRoute, Stop, StopTime, Trip, Route, Shape} from "./a_hanyou";
+import {Calendar, Station, ApiRoute, Stop, StopTime, Trip, Route, Shape, Service} from "./a_hanyou";
 
 export class BmdInput{
 	public stops:Array<Stop>=[];
@@ -15,15 +15,15 @@ export class BmdInput{
 	public stop_times:StopTime[]=[];
 	public trips:Trip[]=[];
 	public shapes:Shape[]=[];
-	public route:Route[]=[];
-	
+	public routes:Route[]=[];
+
 }
 export class BmdOutput{
 	public stops:Array<Stop>=[];
-	public rt=null;
+	 public rt:string=null;
 	public calendar:Array<Calendar>=[];
 	public ur_stops:Array<Stop>=[];
-	public parent_stations:Station[]=[]
+	public parent_stations:Station[]=[];
 	public trips:Trip[]=[];
 	public ur_routes:Route[]=[];
 }
@@ -49,7 +49,7 @@ export function f_make_bmd(a_data:BmdInput):BmdOutput {
 	//親が未設定の場合に、stop_nameを設定する
 	for (let c_ur_stop of c_bmd.ur_stops) {
 		if (c_ur_stop.parent_station === "" || c_ur_stop.parent_station === undefined) {
-			c_ur_stop.parent_station = c_ur_stop["stop_name"];//stop_nameで代用する
+			c_ur_stop.parent_station = c_ur_stop.stop_name;//stop_nameで代用する
 		}
 	}
 	//親の一覧を作る
@@ -92,7 +92,7 @@ export function f_make_bmd(a_data:BmdInput):BmdOutput {
 		} else {//元データにあるとき
 			const parentStation=new Station();
 			parentStation.stop_id=i2;
-			parentStation.stop_name=c_stop_id_index[i2]["stop_name"];
+			parentStation.stop_name=c_stop_id_index[i2].stop_name;
 			parentStation.stop_lat=c_parent_station_list[i2].stop_lat;
 			parentStation.stop_lon=c_parent_station_list[i2].stop_lon;
 			parentStation.location_type="1";
@@ -105,22 +105,22 @@ export function f_make_bmd(a_data:BmdInput):BmdOutput {
 		//stop_index（stop_number）を追加（互換性のため）
 		const c_stop_number : { [key: string]: number }= {};
 		for (let i2 = 0; i2 < c_bmd.ur_stops.length; i2++) {
-			c_stop_number["stop_id_" + c_bmd.ur_stops[i2].stop_id] = i2;
+			c_stop_number[ c_bmd.ur_stops[i2].stop_id] = i2;
 		}
 		for (let i2 = 0; i2 < c_bmd.trips.length; i2++) {
 			for (let i3 = 0; i3 < c_bmd.trips[i2].stop_times.length; i3++) {
-				c_bmd.trips[i2].stop_times[i3]["stop_number"] = c_stop_number["stop_id_" + c_bmd.trips[i2].stop_times[i3].stop_id];
+				c_bmd.trips[i2].stop_times[i3].stop_number = c_stop_number[ c_bmd.trips[i2].stop_times[i3].stop_id];
 			}
 		}
-		for (let i2 = 0; i2 < c_bmd["ur_routes"].length; i2++) {
-			for (let i3 = 0; i3 < c_bmd["ur_routes"][i2]["stop_array"].length; i3++) {
-				c_bmd["ur_routes"][i2]["stop_array"][i3]["stop_number"] = c_stop_number["stop_id_" + c_bmd["ur_routes"][i2]["stop_array"][i3].stop_id];
+		for (let i2 = 0; i2 < c_bmd.ur_routes.length; i2++) {
+			for (let i3 = 0; i3 < c_bmd.ur_routes[i2].stop_array.length; i3++) {
+				c_bmd.ur_routes[i2].stop_array[i3].stop_number = c_stop_number[c_bmd.ur_routes[i2].stop_array[i3].stop_id];
 			}
 		}
 		return c_bmd;
 	}
-	
-	
+
+
 	//[4]trips
 	for (let i2 = 0; i2 < a_data.trips.length; i2++) {
 		const c_trip:Trip=a_data.trips[i2].clone();
@@ -133,7 +133,7 @@ export function f_make_bmd(a_data:BmdInput):BmdOutput {
 	}
 	for (let i2 = 0; i2 < a_data.stop_times.length; i2++) {
 		const c_stop_time :StopTime=a_data.stop_times[i2].clone();
-		
+
 		if (c_trip[c_stop_time.trip_id] === undefined) {
 			c_trip[c_stop_time.trip_id] = new Trip();
 		}
@@ -175,111 +175,103 @@ export function f_make_bmd(a_data:BmdInput):BmdOutput {
 	//shapesをtripsにまとめる。
 	for (let i2 = 0; i2 < c_bmd.trips.length; i2++) {
 		const c_shapes = c_shape_index[c_bmd.trips[i2].shape_id];
-		for (let i3 = 0; i3 < c_shapes.length; i3++) {
-			const c_shape = {};
-			for (let i4 in c_shapes[i3]) {
-				c_shape[i4] = c_shapes[i3][i4];
-			}
-			c_bmd.trips[i2].shapes.push(c_shape);
+		for (let shape of c_shapes) {
+			c_bmd.trips[i2].shapes.push(shape.clone());
 		}
 	}
 	//[5]ur_routes
 	//ur_routesをつくる
-	const c_route_index = {};
-	for (let i2 = 0; i2 < a_data["routes"].length; i2++) {
-		c_route_index["route_id_" + a_data["routes"][i2]["route_id"]] = a_data["routes"][i2];
+	const c_route_index:{[key:string]:Route} = {};
+	for (let i2 = 0; i2 < a_data.routes.length; i2++) {
+		c_route_index[a_data.routes[i2].route_id] = a_data.routes[i2];
 	}
 	for (let i2 = 0; i2 < c_bmd.trips.length; i2++) {
 		const c_trip = c_bmd.trips[i2];
 		//既に同じur_routeがあるか探す。
 		let l_exist = false; //違うと仮定
-		for (let i3 = 0; i3 < c_bmd["ur_routes"].length; i3++) {
-			const c_ur_route = c_bmd["ur_routes"][i3];
-			if (c_ur_route["route_id"] !== c_trip["route_id"] || c_ur_route["stop_array"].length !== c_trip.stop_times.length || c_ur_route["shape_pt_array"].length !== c_trip.shapes.length) {
+		for (let i3 = 0; i3 < c_bmd.ur_routes.length; i3++) {
+			const c_ur_route: Route = c_bmd.ur_routes[i3];
+			if (c_ur_route.route_id !== c_trip.route_id || c_ur_route.stop_array.length !== c_trip.stop_times.length || c_ur_route.shape_pt_array.length !== c_trip.shapes.length) {
 				continue; //違う
 			}
 			l_exist = true; //同じと仮定
-			for (let i4 = 0; i4 < c_ur_route["stop_array"].length; i4++) {
-				if(c_ur_route["stop_array"][i4].stop_id !== c_trip.stop_times[i4].stop_id || c_ur_route["stop_array"][i4]["pickup_type"] !== c_trip.stop_times[i4]["pickup_type"] || c_ur_route["stop_array"][i4]["drop_off_type"] !== c_trip.stop_times[i4]["drop_off_type"]) {
+			for (let i4 = 0; i4 < c_ur_route.stop_array.length; i4++) {
+				if (c_ur_route.stop_array[i4].stop_id !== c_trip.stop_times[i4].stop_id || c_ur_route.stop_array[i4].pickup_type !== c_trip.stop_times[i4].pickup_type || c_ur_route.stop_array[i4].drop_off_type !== c_trip.stop_times[i4].drop_off_type) {
 					l_exist = false; //違う
 					break;
 				}
 			}
-			for (let i4 = 0; i4 < c_ur_route["shape_pt_array"].length; i4++) {
-				if(c_ur_route["shape_pt_array"][i4]["shape_pt_lat"] !== c_trip.shapes[i4]["shape_pt_lat"] || c_ur_route["shape_pt_array"][i4]["shape_pt_lon"] !== c_trip.shapes[i4]["shape_pt_lon"]) {
+			for (let i4 = 0; i4 < c_ur_route.shape_pt_array.length; i4++) {
+				if (c_ur_route.shape_pt_array[i4].shape_pt_lat !== c_trip.shapes[i4].shape_pt_lat || c_ur_route.shape_pt_array[i4].shape_pt_lon !== c_trip.shapes[i4].shape_pt_lon) {
 					l_exist = false; //違う
 					break;
 				}
 			}
 			if (l_exist === true) { //同じものが見つかったとき
-				c_trip["ur_route_id"] = c_ur_route["ur_route_id"];
+				c_trip.ur_route_id = c_ur_route.ur_route_id;
 				let l_exist_2 = false;
-				for (let i4 = 0; i4 < c_ur_route["service_array"].length; i4++) {
-					if (c_ur_route["service_array"][i4]["service_id"] === c_trip["service_id"]) {
-						c_ur_route["service_array"][i4]["number"] += 1;
+				for (let i4 = 0; i4 < c_ur_route.service_array.length; i4++) {
+					if (c_ur_route.service_array[i4].service_id === c_trip.service_id) {
+						c_ur_route.service_array[i4].number += 1;
 						l_exist_2 = true;
 					}
 				}
 				if (l_exist_2 === false) {
-					c_ur_route["service_array"].push({
-						"service_id": c_trip["service_id"]
-						, "number": 1
-					});
+					const service = new Service();
+					service.service_id = c_trip.service_id;
+					service.number = 1;
+					c_ur_route.service_array.push(service);
 				}
 				break;
 			}
+
 		}
 		if (l_exist === false) { //見つからないとき
-			c_trip["ur_route_id"] = "ur_route_id_" + String(i2);
-			const c_ur_route = {"ur_route_id": "ur_route_id_" + String(i2), "stop_array": [], "shape_pt_array": [], "service_array": [{"service_id": c_trip["service_id"], "number": 1}]};
-			for (let i3 in c_route_index["route_id_" + c_trip["route_id"]]) {
-				c_ur_route[i3] = c_route_index["route_id_" + c_trip["route_id"]][i3];
-			}
-			for (let i3 = 0; i3 < c_trip.stop_times.length; i3++) {
-				c_ur_route["stop_array"].push({
-					"stop_id": c_trip.stop_times[i3].stop_id
-					, "pickup_type": c_trip.stop_times[i3]["pickup_type"]
-					, "drop_off_type": c_trip.stop_times[i3]["drop_off_type"]
-				});
+			c_trip.ur_route_id = String(i2);
+			const c_ur_route=c_route_index[c_trip.route_id].clone();
+			c_ur_route.ur_route_id=String(i2);
+			const service=new Service();
+			service.service_id=c_trip.service_id;
+			service.number=1;
+			c_ur_route.service_array.push(service);
+			for (let stop of c_trip.stop_times) {
+				c_ur_route.stop_array.push(stop.clone());
 			}
 			for (let i3 = 0; i3 < c_trip.shapes.length; i3++) {
 				const c_shape = {};
-				for (let i4 in c_trip.shapes[i3]) {
-					c_shape[i4] = c_trip.shapes[i3][i4];
-				}
-				c_ur_route["shape_pt_array"].push(c_shape);
+				c_ur_route.shape_pt_array.push(c_trip.shapes[i3].clone());
 			}
-			c_bmd["ur_routes"].push(c_ur_route);
+			c_bmd.ur_routes.push(c_ur_route);
 		}
 	}
 	//並び替え
-	const c_route_number = {};
-	for (let i2 = 0; i2 < a_data["routes"].length; i2++) {
-		c_route_number["route_id_" + a_data["routes"][i2]["route_id"]] = i2;
+	const c_route_number:{[key:string]:number} = {};
+	for (let i2 = 0; i2 < a_data.routes.length; i2++) {
+		c_route_number[a_data.routes[i2].route_id] = i2;
 	}
-	c_bmd["ur_routes"].sort(function(a1,a2) {
-		if (c_route_number["route_id_" + a1["route_id"]] < c_route_number["route_id_" + a2["route_id"]]) {
+	c_bmd.ur_routes.sort(function(a1,a2) {
+		if (c_route_number[a1.route_id] < c_route_number[a2.route_id]) {
 			return -1;
 		}
-		if (c_route_number["route_id_" + a1["route_id"]] > c_route_number["route_id_" + a2["route_id"]]) {
+		if (c_route_number[a1.route_id] > c_route_number[a2.route_id]) {
 			return 1;
 		}
 		return 0;
 	});
-	
+
 	//stop_index（stop_number）を追加（互換性のため）
-	const c_stop_number = {};
+	const c_stop_number:{[key:string]:number} = {};
 	for (let i2 = 0; i2 < c_bmd.ur_stops.length; i2++) {
-		c_stop_number["stop_id_" + c_bmd.ur_stops[i2].stop_id] = i2;
+		c_stop_number[c_bmd.ur_stops[i2].stop_id] = i2;
 	}
 	for (let i2 = 0; i2 < c_bmd.trips.length; i2++) {
 		for (let i3 = 0; i3 < c_bmd.trips[i2].stop_times.length; i3++) {
-			c_bmd.trips[i2].stop_times[i3]["stop_number"] = c_stop_number["stop_id_" + c_bmd.trips[i2].stop_times[i3].stop_id];
+			c_bmd.trips[i2].stop_times[i3].stop_number = c_stop_number[c_bmd.trips[i2].stop_times[i3].stop_id];
 		}
 	}
-	for (let i2 = 0; i2 < c_bmd["ur_routes"].length; i2++) {
-		for (let i3 = 0; i3 < c_bmd["ur_routes"][i2]["stop_array"].length; i3++) {
-			c_bmd["ur_routes"][i2]["stop_array"][i3]["stop_number"] = c_stop_number["stop_id_" + c_bmd["ur_routes"][i2]["stop_array"][i3].stop_id];
+	for (let i2 = 0; i2 < c_bmd.ur_routes.length; i2++) {
+		for (let i3 = 0; i3 < c_bmd.ur_routes[i2].stop_array.length; i3++) {
+			c_bmd.ur_routes[i2].stop_array[i3].stop_number = c_stop_number[c_bmd.ur_routes[i2].stop_array[i3].stop_id];
 		}
 	}
 	return c_bmd;

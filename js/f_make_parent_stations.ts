@@ -7,6 +7,8 @@
 //統合はstop_nameで行う（緯度経度から位置を確認すべきか？）
 //親も一応用意する
 
+import {BmdInput} from "./f_make_bmd";
+
 export function f_make_parent_stations(a_data) {
 	//stopsが必要
 	//ur_stops

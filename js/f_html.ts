@@ -1,5 +1,7 @@
 //HTMLの変更
-export function f_html(a_settings) {
+import {InputSetting} from "./a_hanyou";
+
+export function f_html(a_settings:InputSetting) {
 	let l_html = "";
 	//leaflet
 	if (a_settings["leaflet"] === true) {

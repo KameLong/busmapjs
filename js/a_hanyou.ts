@@ -1,11 +1,17 @@
+import {Polyline} from "leaflet";
 
-export class UrRoute{
-
+export class Service{
+    public service_id="";
+    public number=0;
 }
 export class Trip{
     public stop_times:StopTime[]=[];
-    public shapes=[];
+    public shapes:Shape[]=[];
     public trip_id="";
+    public shape_id="";
+    public route_id="";
+    public ur_route_id="";
+    public service_id="";
 }
 export class Stop{
     public stop_id="";
@@ -15,6 +21,9 @@ export class Stop{
     public location_type="";
     public parent_station="";
     public platform_code="";
+    public stop_number=0;
+    public pickup_type=0;
+    public drop_off_type=0;
 
     public clone():Stop{
         const result=new Stop();
@@ -25,6 +34,7 @@ export class Stop{
         result.location_type=this.location_type;
         result.parent_station=this.parent_station;
         result.platform_code=this.platform_code;
+        result.stop_number=this.stop_number;
         return result;
     }
 }
@@ -41,18 +51,26 @@ export class Station{
 export class ApiStation{
     public id:string="";
     public name:string="";
-    public lat:string="";
-    public lon:string="";
+    public lat:number=0;
+    public lon:number=0;
 }
 export class ApiRoute{
     public stationList:Array<String>=[];
     public name:string="";
     public color:string="";
     public id:string="";
+    public l_polyline:Polyline=null;
+    public polyline=null;
+    public l_points=null;
+    public points=null;
 
 }
 export class Route{
-    public stop_array=[];
+    public route_id="";
+    public stop_array:Stop[]=[];
+    public shape_pt_array=[];
+    public ur_route_id:string="";
+    public service_array=[];
 }
 
 export class Calendar{
@@ -87,10 +105,16 @@ export class StopTime{
     public stop_id="";
     public trip_id="";
     public stop_sequence=0;
+    public pickup_type=0;
+    public drop_off_type=0;
+
 }
 export class Shape{
     public shape_id="";
     public shape_pt_sequence=0;
+    public shape_pt_lat=0;
+    public shape_pt_lon=0;
+
 }
 export class InputSetting{
     public cors_url: string="";//CORSの問題を回避するため、間にサーバーサイドのプログラムを挟む場合に前に加えるURL
