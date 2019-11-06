@@ -1,135 +1,101 @@
-//"use strict";
 //これ以外に読み込みが必要なもの
-//leaflet
 //zip.min.js
-//rt関係
-//f_busmap({});
-console.log("ここ");
+
 //クリックできるところを青字下線
-//document.getElementsByTagName("style")[0].innerHTML += " span[onclick] {color: blue; text-decoration: underline;}";
-document.getElementsByTagName("head")[0].innerHTML += "<style>span[onclick] {color: blue; text-decoration: underline;}</style>";
+import {f_zip_to_text} from "./f_zip_to_text";
+import {f_csv_to_json} from "./f_csv_to_json";
+import * as L from 'leaflet';
+import {f_number_gtfs} from "./f_number_gtfs";
+import {f_set_stop_type} from "./f_set_stop_type";
+
+document.getElementsByTagName("style")[0].innerHTML += " span[onclick] {color: blue; text-decoration: underline;}";
 
 
 //グローバル変数
-let l_map; //leaflet
 let l_data = {};//グローバルな情報を扱う。
 let l_tooltip_x = 0;//ツールチップの位置
 let l_tooltip_y = 0;//ツールチップの位置
 let l_settings = {};//設定
 
-import {f_input_settings} from "./js/f_input_settings.js";
-import {f_html} from "./js/f_html.js";
 
 
-import {f_xhr_get} from "./js/f_xhr_get.js";
-import {f_zip_to_text} from "./js/f_zip_to_text.js";
-import {f_csv_to_json} from "./js/f_csv_to_json.js";
-import {f_binary_to_json} from "./js/f_binary_to_json.js";
+//基本となる関数
+async function f_busmap(a_settings) {
+	//a_settingsは設定
+	const c_input = a_settings["data"];
+	//const c_response = [];//XHR
+	const c_bmd = {"rt": null, "stops": [], "ur_stops": [], "parent_stations": [], "ur_routes": [], "calendar": [], "trips": []};//バスマップに用いるデータをここにまとめる、stopsは仮に残す
 
-import {f_from_topojson} from "./js/f_from_topojson.js";
-import {f_from_geojson} from "./js/f_from_geojson.js";
-import {f_from_api} from "./js/f_from_api.js";
-
-import {f_prepare_json} from "./js/f_prepare_json.js";
-
-import {f_set_stop_type} from "./js/f_set_stop_type.js";
-import {f_set_route_sort_order} from "./js/f_set_route_sort_order.js";
-import {f_number_gtfs} from "./js/f_number_gtfs.js";
-import {f_make_ur_routes} from "./js/f_make_ur_routes.js";
-
-import {f_set_color} from "./js/f_set_color.js";
-import {f_make_shape_pt_array} from "./js/f_make_shape_pt_array.js";
-
-import {f_make_parent_stations} from "./js/f_make_parent_stations.js";
-import {f_stop_number} from "./js/f_stop_number.js";
-
-window.f_busmap = async function f_busmap(a_settings) {
-	console.time("make_bmd");
 	//初期設定
-	a_settings = f_input_settings(a_settings);
-	//HTMLの初期設定
-	document.getElementById(a_settings["div_id"]).innerHTML = f_html(a_settings);
-	//leafletの初期設定
-	if (a_settings["leaflet"] === true) {
-		l_map = L.map("div_leaflet"); //leafletの読み込み。
-		for (let i1 = 0; i1 < a_settings["background_layers"].length; i1++) {
-			L.tileLayer(a_settings["background_layers"][i1][0], a_settings["background_layers"][i1][1]).addTo(l_map); //背景地図（地理院地図等）を表示する。
-		}
-		L.svg().addTo(l_map); //svg地図を入れる。
-	}
-	
-	
-	//a_settings["data"] = "https://toyotamakenkyusyo.github.io/gtfs/3270001000564/next/GTFS-JP.zip"; //仮
-	//a_settings["data"] = "test.geojson"; //仮
-	//a_settings["data_type"] = "geojson"; //仮
-	
-	//データの読み込みと前処理
-	let l_data = {};
-	if (a_settings["data_type"] === "gtfs") {
-		const c_arraybuffer = await f_xhr_get(a_settings["data"], "arraybuffer");
-		const c_text = await f_zip_to_text(c_arraybuffer, Zlib);
-		//Zlibはhttps://cdn.jsdelivr.net/npm/zlibjs@0.3.1/bin/unzip.min.js
-		for (let i1 in c_text) {
-			l_data[i1.replace(".txt", "")] = f_csv_to_json(c_text[i1]);
-		}
-		//GTFSの差異を統一（ur_routesを作るのに必要なroute_sort_order、pickup_type、drop_off_type）
-		//pickup_typeとdrop_off_typeを補う
-		f_set_stop_type(l_data);
-		//route_sort_orderを補う
-		f_set_route_sort_order(l_data);
-		//緯度、経度、順番の型を数に変換
-		f_number_gtfs(l_data);
-		//ur_routesを作る
-		f_make_ur_routes(l_data);
-	} else if (a_settings["data_type"] === "json" || a_settings["data_type"] === "geojson" || a_settings["data_type"] === "topojson" || a_settings["data_type"] === "api") {
-		l_data = await f_xhr_get(a_settings["data"], "json");
-		if (a_settings["data_type"] === "topojson") {
-			l_data = f_from_topojson(l_data);
-		} else if (a_settings["data_type"] === "geojson") {
-			l_data = f_from_geojson(l_data);
-		} else if (a_settings["data_type"] === "api") {
-			l_data = f_from_api(l_data);
-		}
-		//この時点では、stops、ur_routesのみ
-		//stop_nameを補う
-		//a_data["calendar"] = []; //仮、互換性
-		//a_data["ur_routes"][i1]["service_array"] = ""; //仮の処置
-		//a_data["ur_routes"][i1]["trip_number"] = 999; //仮に999とする。
-		f_prepare_json(l_data);
-	} else {
-		new Error("読み込みできないタイプ");
-	}
-	
-	
-	//route_color、route_text_colorを補う
-	f_set_color(l_data);
-	//shape_pt_arrayを補う
-	f_make_shape_pt_array(l_data);
-	//location_typeを補う（未作成）
-	f_make_parent_stations(l_data);
-	f_stop_number(l_data);
-	
-	//GTFS-RTの読み込み
-	l_data["rt"] = null;
-	if (typeof a_settings["rt"] === "string") {
-		const c_grb = module.exports.transit_realtime;
-		const c_cors_url = a_settings["cors_url"]; //クロスオリジンを回避するphpをかませる
-		const c_rt_url = c_cors_url + a_settings["rt"];
-		a_data["rt"] = f_binary_to_json(await f_xhr_get(c_rt_url, "arraybuffer"), c_grb);
-	}
-	console.timeEnd("make_bmd");
-	console.log(l_data);
-	const c_bmd = l_data;
-	//f_leaflet(c_bmd);
-	
-	
+	const c_input_settings = f_input_settings(a_settings);
 
-	
-	
-	
+	//HTMLの変更
+	document.getElementById(c_input_settings["div_id"]).innerHTML = f_html(c_input_settings);
+	//leafletの初期設定
+	if (c_input_settings["leaflet"] === true) {
+		f_set_leaflet(c_input_settings);
+	}
+	// //GTFS-RTの読み込み
+	// if (c_input_settings["rt"] !== false) {
+	// 	const c_grb = module.exports.transit_realtime;
+	// 	const c_cors_url = c_input_settings["cors_url"];//クロスオリジンを回避するphpをかませる
+	// 	const c_rt_url = c_cors_url + c_input_settings["rt"];
+	// 	c_bmd["rt"] = f_binary_to_json((await f_xhr_get(c_rt_url, "arraybuffer")).response, c_grb);
+	// 	function f_binary_to_json(a_binary, a_grb) {
+	// 		const c_array_1 = new Uint8Array(a_binary);
+	// 		const c_array_2 = [];
+	// 		for (var i1 = 3; i1 < c_array_1.length; i1++) {
+	// 			c_array_2.push(c_array_1[i1]);
+	// 		}
+	// 		return a_grb.FeedMessage.decode(c_array_2);
+	// 	}
+	// }
+	//XHR
+	const c_data = [{}];
+	//GTFSの場合、ZIPの解凍
+	console.log(c_input_settings);
+	if (c_input_settings["data_type"] === "gtfs") {
+		const c_response = await f_zip_to_text(c_input_settings["data"],null);//todo a_zlib
+		//c_responseに取得したデータがある
+		//これをc_dataにまとめる
+		const c_file_names = ["agency", "agency_jp", "stops", "routes", "routes_jp", "trips", "office_jp", "stop_times", "calendar", "calendar_dates", "fare_attributes", "fare_rules", "shapes", "frequencies", "transfers", "feed_info", "translations"];
+		for (let i1 = 0; i1 < c_file_names.length; i1++) {
+			if (c_response[c_file_names[i1]] !== undefined) {
+				c_data[0][c_file_names[i1]] =  f_csv_to_json(c_response[c_file_names[i1]]);
+			} else if (c_response[c_file_names[i1] + ".txt"] !== undefined) {
+				c_data[0][c_file_names[i1]] =  f_csv_to_json(c_response[c_file_names[i1] + ".txt"]);
+			}
+		}
+	} else if (c_input_settings["data_type"] === "json" || c_input_settings["data_type"] === "geojson" || c_input_settings["data_type"] === "topojson" || c_input_settings["data_type"] === "api") {
+		c_data[0] = JSON.parse((await f_xhr_get(c_input_settings["data"], "text")).responseText);
+		console.log(c_data[0]);
+		if (c_input_settings["data_type"] === "topojson") {
+			c_data[0] = f_topojson_to_geojson(c_data[0]);
+			c_data[0] = f_from_geojson(c_data[0]["stops"]["features"], c_data[0]["ur_routes"]["features"]);
+		}
+		console.log(c_data[0]);
+		if (c_input_settings["data_type"] === "geojson") {
+			c_data[0] = f_geojson_to_json(c_data[0]);
+		}
+		if (c_input_settings["data_type"] === "api") {
+			c_data[0] = f_from_api(c_data[0]);
+		}
+		console.log(c_data[0]);
+	}
+	//準備
+	for (let i1 = 0; i1 < c_data.length; i1++) {
+		console.log(c_data);
+		if (c_data[i1]["stop_times"] === undefined) {//json由来
+			f_prepare_json(c_data[i1]);
+		} else {//gtfs由来
+			f_prepare_gtfs(c_data[i1]);
+		}
+	}
+	//c_bmdに移す
+	f_make_bmd(c_data, c_bmd);
 	//f_prepare_common(a_data[0]);
 	//f_next_2(c_bmd, c_input_settings);//ここから仮につなげる
-	if (a_settings["change"] === true) {
+	if (c_input_settings["change"] === true) {
 		//当面機能停止
 		//document.getElementById("ur_route_list").innerHTML = f_ur_route_list(c_bmd);
 	}
@@ -137,7 +103,7 @@ window.f_busmap = async function f_busmap(a_settings) {
 	f_make_shape_points(c_bmd);
 	console.timeEnd("t_5");
 	console.time("t_6");
-	f_set_xy(c_bmd, a_settings["zoom_level"]); //shape_pointsとstopsに座標xyを加える。
+	f_set_xy(c_bmd, c_input_settings["zoom_level"]); //shape_pointsとstopsに座標xyを加える。
 	console.timeEnd("t_6");
 	console.time("t_7");
 	f_make_shape_segments(c_bmd);
@@ -150,7 +116,7 @@ window.f_busmap = async function f_busmap(a_settings) {
 	f_make_shape_segments(c_bmd);
 	console.timeEnd("t_9");
 	console.time("t_10");
-	f_cut_shape_segments(c_bmd, a_settings["zoom_level"]); //3s遅い。高速化困難。ここでshape_pointが増加、stopにnearest_shape_pt_idを追加、shape_pt_arrayに変更あり。
+	f_cut_shape_segments(c_bmd, c_input_settings["zoom_level"]); //3s遅い。高速化困難。ここでshape_pointが増加、stopにnearest_shape_pt_idを追加、shape_pt_arrayに変更あり。
 	console.timeEnd("t_10");
 	console.time("t_11");
 	f_make_new_shape_pt_array(c_bmd);
@@ -164,15 +130,230 @@ window.f_busmap = async function f_busmap(a_settings) {
 	console.log(c_bmd);
 	f_trip_number(c_bmd);//便数を数える
 	//グローバルに移す
-	if (a_settings["global"] === true) {
+	if (c_input_settings["global"] === true) {
 		l_data = c_bmd;
-		l_settings = a_settings;
+		l_settings = c_input_settings;
 	}
 	
 	console.time("t_14");
-	f_open(c_bmd, a_settings); //6s遅い！
+	f_open(c_bmd, c_input_settings); //6s遅い！
 	console.timeEnd("t_14");
 	
+}
+
+
+
+
+//データの変換
+function f_topojson_to_geojson(a_topojson) {
+	//arcsをcoordinatesに変換
+	for (let i1 in a_topojson["objects"]) {
+		//以下、GeometryCollectionのみ対象
+		if (a_topojson["objects"][i1]["type"] !== "GeometryCollection") {
+			continue;
+		}
+		for (let i2 = 0; i2 < a_topojson["objects"][i1]["geometries"].length; i2++) {
+			const c_geometry = a_topojson["objects"][i1]["geometries"][i2];
+			//以下、LineStringのみ対象
+			if (c_geometry["type"] !== "LineString") {
+				continue;
+			}
+			c_geometry["coordinates"] = [];
+			for (let i3 = 0; i3 < c_geometry["arcs"].length; i3++) {
+				const c_number = c_geometry["arcs"][i3];
+				if (c_number >= 0) {
+					const c_arc = a_topojson["arcs"][c_number];
+					for (let i4 = 0; i4 < c_arc.length; i4++) {
+						if (c_geometry["coordinates"].length > 0) {
+							if (i4 === 0 && c_arc[0][0] === c_geometry["coordinates"][c_geometry["coordinates"].length - 1][0] && c_arc[0][1] === c_geometry["coordinates"][c_geometry["coordinates"].length - 1][1]) {
+								continue;
+							}
+						}
+						c_geometry["coordinates"].push(c_arc[i4]);
+					}
+				} else if (c_number < 0) {
+					const c_arc = a_topojson["arcs"][(c_number + 1) * (-1)];
+					for (let i4 = c_arc.length - 1; i4 >= 0; i4--) {
+						if (c_geometry["coordinates"].length > 0) {
+							if (i4 === c_arc.length - 1 && c_arc[c_arc.length - 1][0] === c_geometry["coordinates"][c_geometry["coordinates"].length - 1][0] && c_arc[c_arc.length - 1][1] === c_geometry["coordinates"][c_geometry["coordinates"].length - 1][1]) {
+								continue;
+							}
+						}
+						c_geometry["coordinates"].push(c_arc[i4]);
+					}
+				}
+			}
+		}
+	}
+	//GeometryCollectionをFeatureCollectionに変換
+	const c_geojsons = {};
+	for (let i1 in a_topojson["objects"]) {
+		//以下、GeometryCollectionのみ対象
+		if (a_topojson["objects"][i1]["type"] !== "GeometryCollection") {
+			continue;
+		}
+		c_geojsons[i1] = {"type": "FeatureCollection", "features": []};
+		for (let i2 = 0; i2 < a_topojson["objects"][i1]["geometries"].length; i2++) {
+			const c_geometry = a_topojson["objects"][i1]["geometries"][i2];
+			//以下、PointとLineStringのみ対象
+			if (c_geometry["type"] !== "Point" && c_geometry["type"] !== "LineString") {
+				continue;
+			}
+			c_geojsons[i1]["features"].push({"type": "Feature", "geometry": {"type": c_geometry["type"], "coordinates": c_geometry["coordinates"]}, "properties": c_geometry["properties"]});
+		}
+	}
+	return c_geojsons;
+}
+
+
+function f_from_geojson(a_geojson_stops, a_geojson_ur_routes) {
+	const c_stops = [];
+	for (let i1 = 0; i1 < a_geojson_stops.length; i1++) {
+		const c_geometry = a_geojson_stops[i1]["geometry"];
+		if (c_geometry["coordinates"][0] !== undefined && c_geometry["coordinates"][1] !== undefined) {
+			const c_coordinates = [];
+			c_coordinates[0] = c_geometry["coordinates"][0];
+			c_coordinates[1] = c_geometry["coordinates"][1];
+			if (c_coordinates[1] > 90 || c_coordinates[1] < -90) { //緯度経度が逆の場合、修正する
+				c_coordinates[0] = c_geometry["coordinates"][1];
+				c_coordinates[1] = c_geometry["coordinates"][0];
+			}
+			a_geojson_stops[i1]["properties"]["stop_lon"] = c_coordinates[0];
+			a_geojson_stops[i1]["properties"]["stop_lat"] = c_coordinates[1];
+		}
+		a_geojson_stops[i1]["properties"]["stop_name"] = a_geojson_stops[i1]["properties"]["stop_id"].split("_")[0]; //互換性確保
+		c_stops.push(a_geojson_stops[i1]["properties"]);
+	}
+	const c_ur_routes = [];
+	for (let i1 = 0; i1 < a_geojson_ur_routes.length; i1++) {
+		const c_geometry = a_geojson_ur_routes[i1]["geometry"];
+		a_geojson_ur_routes[i1]["properties"]["shape_pt_array"] = [];
+		a_geojson_ur_routes[i1]["properties"]["service_array"] = ""; //互換性確保
+		if (a_geojson_ur_routes[i1]["properties"]["trip_number"] === undefined) {
+			a_geojson_ur_routes[i1]["properties"]["trip_number"] = 1; //互換性確保
+		}
+		for (let i2 = 0; i2 < c_geometry["coordinates"].length; i2++) {
+			const c_coordinates = [];
+			c_coordinates[0] = c_geometry["coordinates"][i2][0];
+			c_coordinates[1] = c_geometry["coordinates"][i2][1];
+			if (c_coordinates[1] > 90 || c_coordinates[1] < -90) { //緯度経度が逆の場合、修正する
+				c_coordinates[0] = c_geometry["coordinates"][i2][1];
+				c_coordinates[1] = c_geometry["coordinates"][i2][0];
+			}
+			a_geojson_ur_routes[i1]["properties"]["shape_pt_array"].push({"shape_pt_lon": c_coordinates[0], "shape_pt_lat": c_coordinates[1]});
+		}
+		c_ur_routes.push(a_geojson_ur_routes[i1]["properties"]);
+	}
+	return {"stops": c_stops, "ur_routes": c_ur_routes, "calendar": [], "routes": c_ur_routes};
+	//routesとcalendarは互換性確保
+}
+
+
+function f_geojson_to_json(a_geojson) {
+	const c_stops = [];
+	for (let i1 = 0; i1 < a_geojson["features"].length; i1++) {
+		const c_feature = a_geojson["features"][i1];
+		if (c_feature["geometry"]["type"] === "Point") { //標柱
+			let l_lon = c_feature["geometry"]["coordinates"][0];
+			let l_lat = c_feature["geometry"]["coordinates"][1];
+			if (l_lat > 90 || l_lat < -90) { //緯度経度が逆の場合、修正する
+				l_lon = c_feature["geometry"]["coordinates"][1];
+				l_lat = c_feature["geometry"]["coordinates"][0];
+			}
+			c_feature["properties"]["stop_lon"] = l_lon;
+			c_feature["properties"]["stop_lat"] = l_lat;
+			c_feature["properties"]["stop_name"] = c_feature["properties"]["stop_id"].split("_")[0]; //互換性確保
+			c_stops.push(c_feature["properties"]);
+		}
+	}
+	if (a_geojson["routes"] === undefined) { //普通のgeojson
+		const c_routes = [];
+		for (let i1 = 0; i1 < a_geojson["features"].length; i1++) {
+			const c_feature = a_geojson["features"][i1];
+			if (c_feature["geometry"]["type"] === "LineString") { //系統
+				c_feature["properties"]["service_array"] = ""; //互換性確保
+				if (c_feature["properties"]["trip_number"] === undefined) {
+					c_feature["properties"]["trip_number"] = 1; //互換性確保
+				}
+				c_feature["properties"]["shape_pt_array"] = [];
+				for (let i2 = 0; i2 < c_feature["geometry"]["coordinates"].length; i2++) {
+					c_feature["properties"]["shape_pt_array"].push({"shape_pt_lon": c_feature["geometry"]["coordinates"][i2][0], "shape_pt_lat": c_feature["geometry"]["coordinates"][i2][1]});
+				}
+			}
+		}
+		return {"stops": c_stops, "routes": c_routes, "ur_routes": c_routes, "calendar": []}; //routesとur_routes、calendarは互換性確保
+	} else { //道路と系統を分離したgeojson
+		for (let i1 = 0; i1 < a_geojson["routes"].length; i1++) {
+			const c_route = a_geojson["routes"][i1];
+			c_route["service_array"] = ""; //互換性確保
+			if (c_route["trip_number"] === undefined) {
+				c_route["trip_number"] = 999; //互換性確保
+			}
+			c_route["shape_pt_array"] = [];
+			for (let i2 = 0; i2 < c_route["arcs"].length - 1; i2++) { //最後の1個を除く
+				for (let i3 = 0; i3 < a_geojson["features"].length; i3++) {
+					const c_feature = a_geojson["features"][i3];
+					if (c_feature["geometry"]["type"] === "LineString") {
+						if (c_feature["properties"]["start_point"] === c_route["arcs"][i2] && c_feature["properties"]["end_point"] === c_route["arcs"][i2 + 1]) {
+							for (let i4 = 0; i4 < c_feature["geometry"]["coordinates"].length; i4++) {
+								if (c_route["shape_pt_array"].length > 0 && i4 === 0) {
+									if (c_route["shape_pt_array"][c_route["shape_pt_array"].length - 1]["shape_pt_lon"] === c_feature["geometry"]["coordinates"][0][0] && c_route["shape_pt_array"][c_route["shape_pt_array"].length - 1]["shape_pt_lat"] === c_feature["geometry"]["coordinates"][0][1]) {
+										continue;
+									}
+								}
+								c_route["shape_pt_array"].push({"shape_pt_lon": c_feature["geometry"]["coordinates"][i4][0], "shape_pt_lat": c_feature["geometry"]["coordinates"][i4][1]});
+							}
+							break;
+						} else if (c_feature["properties"]["end_point"] === c_route["arcs"][i2] && c_feature["properties"]["start_point"] === c_route["arcs"][i2 + 1]) {
+							for (let i4 = c_feature["geometry"]["coordinates"].length - 1; i4 >= 0; i4--) {
+								if (c_route["shape_pt_array"].length > 0 && i4 === c_feature["geometry"]["coordinates"].length - 1) {
+									if (c_route["shape_pt_array"][c_route["shape_pt_array"].length - 1][0] === c_feature["geometry"]["coordinates"][c_feature["geometry"]["coordinates"].length - 1]["shape_pt_lon"] && c_route["shape_pt_array"][c_route["shape_pt_array"].length - 1]["shape_pt_lat"] === c_feature["geometry"]["coordinates"][c_feature["geometry"]["coordinates"].length - 1][1]) {
+										continue;
+									}
+								}
+								c_route["shape_pt_array"].push({"shape_pt_lon": c_feature["geometry"]["coordinates"][i4][0], "shape_pt_lat": c_feature["geometry"]["coordinates"][i4][1]});
+							}
+							break;
+						}
+					}
+				}
+				//console.log("arcがみつからない？" + c_route["arcs"][i2] + " " + c_route["arcs"][i2+1]);
+			}
+		}
+		return {"stops": c_stops, "routes": a_geojson["routes"], "ur_routes": a_geojson["routes"], "calendar": []}; //routesとur_routes、calendarは互換性確保
+	}
+}
+
+
+function f_from_api(a_api) {
+	const c_stops = [];
+	const c_routes = [];
+	for (var i1 in a_api["station"]) {
+		c_stops.push({
+			"stop_id": a_api["station"][i1]["id"],
+			"stop_name": a_api["station"][i1]["name"],
+			"stop_lat": a_api["station"][i1]["lat"],
+			"stop_lon": a_api["station"][i1]["lon"]//,
+		});
+	}
+	for (let i1 in a_api["route"]) {
+		const c_stop_array = [];
+		for (let i2 = 0; i2 < a_api["route"][i1]["stationList"].length; i2++) {
+			c_stop_array.push({"stop_id": a_api["route"][i1]["stationList"][i2]});
+		}
+		c_routes.push({
+			"route_id": a_api["route"][i1]["id"],
+			"route_short_name": a_api["route"][i1]["name"],
+			"route_long_name": a_api["route"][i1]["name"],
+			"jp_parent_route_id": a_api["route"][i1]["name"],
+			"route_color": a_api["route"][i1]["color"].replace(/#/, ""),
+			"stop_array": c_stop_array,
+			"shape_pt_array": [],
+			"service_array": "",
+			"trip_number": 999//, //仮
+		});
+	}
+	return {"stops": c_stops, "routes": c_routes, "ur_routes": c_routes, "calendar": []}; //routesとur_routes、calendarは互換性確保
 }
 
 
@@ -184,9 +365,143 @@ window.f_busmap = async function f_busmap(a_settings) {
 
 
 
+//初期設定
+function f_input_settings(a_settings) {
+	//初期値
+	const c_settings_temp = {
+		"cors_url": "",//CORSの問題を回避するため、間にサーバーサイドのプログラムを挟む場合に前に加えるURL
+		"rt": false,//GTFS-RTの読込
+		"data": "data",//データのURL
+		"data_type": "gtfs",//データがgtfs, json, geojson, topojson, apiか
+		"div_id": "div",//挿入するdivのid
+		"global": true,//trueの場合、値をc_globalに渡し、変更可能にする
+		"change": true,
+		"leaflet": true,
+		"clickable": true,//線等をクリックできる
+		"timetable": true,//時刻表を表示する
+		"direction": true,
+		"parent_route_id": "route_id",
+		"stop_name": true,
+		"stop_name_overlap":true,
+		"zoom_level": 16,
+		"svg_zoom_level": 16, //互換性のため残す
+		"svg_zoom_ratio": 0, //SVG表示縮小率=zoom_level - svg_zoom_level
+		"background_map": true,
+		"background_layers": [["https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png", {attribution: "<a href=\"https://maps.gsi.go.jp/development/ichiran.html\">地理院タイル</a>", opacity: 0.25}]],
+		"font_size": 16, //停留所名のフォントサイズ
+		"font_family": "'源ノ角ゴシック'", //停留所名のフォント、二重のクオーテーションマークに注意
+		"stop_color_standard": "#000000", //通常の停留所記号の色
+		"stop_color_nonstandard": "#FFFFFF", //起終点等の停留所記号の色
+		"stop_color_location": "#C0C0C0", //位置を示す停留所記号の色
+		"stop_stroke_color": "#000000", //停留所記号の縁の色
+		"stop_stroke_width": 1, //停留所記号の縁の太さ
+		"show_stop_location": true, //停留所位置の記号を表示
+		"stop_direction": true, //停留所記号を三角形にして向きを明示
+		"min_space_width": 2, //線の間隔の最小幅
+		"min_width": 4, //線の最小幅
+		"max_width": 8, //線の最大幅
+		"round": true //, //角を丸める
+	};
+	//change trueの場合、設定を変更する
+	//leaflet trueの場合、使用
+	//direction trueの場合、上り下りを分けて描画する
+	//parent_route_id まとめる単位
+	//stop_name trueの場合、表示する
+	//stop_name_overlap trueの場合、重なりを許容する
+	//zoom_level 途中計算で使うズームレベル。なんでもよいが16にしておく。
+	//svg_zoom_lavel SVG出力時のズームレベル。表示される相対的なオフセット幅や文字サイズに影響する。1614は可変。拡大縮小のscaleはここを使う。
+	//background_map trueの場合、表示する
+	//min_width 線の最小幅、単位はpx
+
+	//入力した値を渡す
+	for (let i1 in a_settings) {
+		c_settings_temp[i1] = a_settings[i1];
+	}
+	//設定の制限（暫定的に連動）
+	if (c_settings_temp["global"] === true) {
+		c_settings_temp["change"] = true;
+		c_settings_temp["leaflet"] = true;
+		c_settings_temp["clickable"] = true;
+		c_settings_temp["timetable"] = true;
+	}
+	//設定の制限
+	//グローバルにしないと後から変えられない
+	if (c_settings_temp["global"] !== true) {
+		c_settings_temp["change"] = false;
+		c_settings_temp["leaflet"] = false;
+		c_settings_temp["clickable"] = false;
+		c_settings_temp["timetable"] = false;
+	}
+	//設定の制限
+	//クリックできないと時刻表を表示できない
+	if (c_settings_temp["clickable"] !== true) {
+		c_settings_temp["timetable"] = false;
+	}
+	//設定の互換性
+	if (a_settings["svg_zoom_ratio"] === undefined) {
+		if (c_settings_temp["svg_zoom_level"] === 1614) {
+			c_settings_temp["svg_zoom_ratio"] = 2;
+		} else {
+			c_settings_temp["svg_zoom_ratio"] = 0;
+		}
+	}
+	return c_settings_temp;
+}
+
+//HTMLの変更
+function f_html(a_settings) {
+	let l_html = "";
+	//leaflet
+	if (a_settings["leaflet"] === true) {
+		l_html += "<div id=\"div_leaflet\" style=\"width: auto; height: 768px; background: #FFFFFF;\"></div>"; //背景色を白にしておく
+	}
+	//clickable
+	if (a_settings["clickable"] === true) {
+		l_html += "<div><a id=\"output_svg\" href=\"#\" download=\"busmap.svg\" onclick=\"f_output_svg()\">SVG保存</a></div>";
+		l_html += "<div>地図上の線や停留所記号、停留所名をクリックすると、強調表示や時刻表の表示ができる。</div>";
+		l_html += "<div><span onclick=\"f_route_color()\">全路線を着色</span> <span onclick=\"f_tooltip()\">補足非表示</span></div>";
+	}
+	//設定変更項目の表示
+	if (a_settings["change"] === true) {
+		let l_setting_table = "<div><span onclick=\"f_open(l_data, l_settings)\">設定</span></div>";
+		l_setting_table += "<table><tbody>";
+		l_setting_table += "<tr><td>項目</td><td>現在の値</td><td>変更</td></tr>";
+		l_setting_table += "<tr><td>往復を分けて表示</td><td id=\"td_direction\">" + a_settings["direction"] + "</td><td><span onclick=\"f_change_setting('direction',true)\">true</span> <span onclick=\"f_change_setting('direction',false)\">false</span></td></tr>";
+		l_setting_table += "<tr><td>表示する単位</td><td id=\"td_parent_route_id\">" + a_settings["parent_route_id"] + "</td><td><span onclick=\"f_change_setting('parent_route_id','ur_route_id')\">最小</span> <span onclick=\"f_change_setting('parent_route_id','route_id')\">route_id</span> <span onclick=\"f_change_setting('parent_route_id','jp_parent_route_id')\">jp_parent_route_id</span> <span onclick=\"f_change_setting('parent_route_id','route_short_name')\">route_short_name</span> <span onclick=\"f_change_setting('parent_route_id','route_long_name')\">route_long_name</span> <span onclick=\"f_change_setting('parent_route_id','route_desc')\">route_desc</span> <span onclick=\"f_change_setting('parent_route_id','jp_office_id')\">jp_office_id</span> <span onclick=\"f_change_setting('parent_route_id','agency_id')\">agency_id</span> <span onclick=\"f_change_setting('parent_route_id','')\">全て</span></td></tr>";
+		l_setting_table += "<tr><td>停留所名を表示</td><td id=\"td_stop_name\">" + a_settings["stop_name"] + "</td><td><span onclick=\"f_change_setting('stop_name',true)\">true</span> <span onclick=\"f_change_setting('stop_name',false)\">false</span></td></tr>";
+		l_setting_table += "<tr><td>停留所名の重なりを回避（非常に遅いので注意）</td><td id=\"td_stop_name_overlap\">" + a_settings["stop_name_overlap"] + "</td><td><span onclick=\"f_change_setting('stop_name_overlap',true)\">true</span> <span onclick=\"f_change_setting('stop_name_overlap',false)\">false</span></td></tr>";
+		l_setting_table += "<tr><td>背景地図を表示</td><td id=\"td_background_map\">" + a_settings["background_map"] + "</td><td><span onclick=\"f_change_setting('background_map',true)\">true</span> <span onclick=\"f_change_setting('background_map',false)\">false</span></td></tr>";
+		l_setting_table += "</tbody></table>";
+		l_setting_table += "<div id=\"ur_route_list\"></div>";
+		l_html += "<div id=\"div_setting_table\">" + l_setting_table + "</div>";
+	}
+	//timetable
+	if (a_settings["timetable"] === true) {
+		let l_div4 = "";
+		l_div4 += "<div>路線時刻表</div>";
+		l_div4 += "<div id=\"parent_route_timetable\" style=\"height: 256px; overflow: scroll; white-space: nowrap;\"></div>";
+		l_div4 += "<div>ダイヤグラム</div>";
+		l_div4 += "<div id=\"svg_timetable\" style=\"height: 256px; overflow: scroll; white-space: nowrap;\"></div>";
+		l_div4 += "<div><span id=\"stop_name\">標柱</span><span>の時刻表（便をクリックすると地図上に到着時刻を表示）</span> <span onclick=\"f_timetable()\">地図上の到着時刻を非表示</span></div>";
+		l_div4 += "<div id=\"timetable\" style=\"height: 256px; overflow: scroll; white-space: nowrap;\"></div>";
+		l_div4 += "<div>経由路線（路線をクリックすると路線時刻表とダイヤグラムを表示し、地図上で強調表示）</div>";
+		l_div4 += "<ul id=\"route_list\"></ul>";
+		l_html += "<div id=\"div_timetable\">" + l_div4 + "</div>";
+	}
+	return l_html;
+}
 
 
-
+function f_set_leaflet(a_settings) {
+	//leaflet関係
+	const map = L.map("div_leaflet"); //leafletの読み込み。
+	//背景地図（地理院地図等）を表示する。
+	for (let i1 = 0; i1 < a_settings["background_layers"].length; i1++) {
+		L.tileLayer(a_settings["background_layers"][i1][0], a_settings["background_layers"][i1][1]).addTo(map);
+	}
+	//svg地図を入れる。
+	L.svg().addTo(map);
+}
 
 
 
@@ -200,10 +515,443 @@ function f_change_setting(a_key, a_value) {
 
 
 
+//XHR
+function f_xhr_get(a_url, a_type) {
+	function f_promise(a_resolve, a_reject) {
+		const c_xhr = new XMLHttpRequest();
+		c_xhr.responseType = a_type;//"arraybuffer";
+		c_xhr.open("get", a_url);
+		function f_resolve() {
+			a_resolve(c_xhr);
+		}
+		function f_reject() {
+			a_reject("error");
+		}
+		c_xhr.onload = f_resolve;
+		c_xhr.onerror = f_reject;
+		c_xhr.send(null);
+	}
+	return new Promise(f_promise);
+}
+
+//ZIPの解凍
 
 
 
 
+
+
+
+function f_prepare_json(a_data) {
+	a_data["ur_routes"] = a_data["routes"];//古いデータとの互換性？
+	a_data["trips"] = [];//（互換性のため。こうしないと後でエラーになる）
+	//stop_numberをつける。（互換性のため）
+	for (let i1 = 0; i1 < a_data["stops"].length; i1++) {
+		const c_stop_id = a_data["stops"][i1]["stop_id"];
+		for (let i2 = 0; i2 < a_data["routes"].length; i2++) {
+			for (let i3 = 0; i3 < a_data["routes"][i2]["stop_array"].length; i3++) {
+				if (a_data["routes"][i2]["stop_array"][i3]["stop_id"] === c_stop_id) {
+					a_data["routes"][i2]["stop_array"][i3]["stop_number"] = i1;
+				}
+			}
+		}
+	}
+	//trip_number関係（一部データとの互換性）
+	for (let i1 = 0; i1 < a_data["calendar"].length; i1++) {
+		a_data["calendar"][i1]["monday"] = String(a_data["calendar"][i1]["monday"]);
+		a_data["calendar"][i1]["tuesday"] = String(a_data["calendar"][i1]["tuesday"]);
+		a_data["calendar"][i1]["wednesday"] = String(a_data["calendar"][i1]["wednesday"]);
+		a_data["calendar"][i1]["thursday"] = String(a_data["calendar"][i1]["thursday"]);
+		a_data["calendar"][i1]["friday"] = String(a_data["calendar"][i1]["friday"]);
+		a_data["calendar"][i1]["saturday"] = String(a_data["calendar"][i1]["saturday"]);
+		a_data["calendar"][i1]["sunday"] = String(a_data["calendar"][i1]["synday"]);//仮
+		a_data["calendar"][i1]["sunday"] = String(a_data["calendar"][i1]["sonday"]);//仮
+		a_data["calendar"][i1]["sunday"] = String(a_data["calendar"][i1]["sunday"]);
+	}
+	//shape補完
+	for (let i1 = 0; i1 < a_data["ur_routes"].length; i1++) {
+		if (a_data["ur_routes"][i1]["shape_pt_array"].length !== 0) {
+			continue;
+		}
+		const c_shapes = [];
+		for (let i2 = 0; i2 < a_data["ur_routes"][i1]["stop_array"].length; i2++) {
+			for (let i3 = 0; i3 < a_data["stops"].length; i3++) {
+				if (a_data["ur_routes"][i1]["stop_array"][i2]["stop_id"] === a_data["stops"][i3]["stop_id"]) {
+					c_shapes.push({
+						"shape_pt_lat": a_data["stops"][i3]["stop_lat"],
+						"shape_pt_lon": a_data["stops"][i3]["stop_lon"]
+					});
+					break;
+				}
+			}
+		}
+		a_data["ur_routes"][i1]["shape_pt_array"] = c_shapes;
+	}
+
+}
+
+
+function f_prepare_gtfs(a_data) {
+	f_number_gtfs(a_data);
+	//GTFSの補完
+	f_color_gtfs(a_data);
+	f_set_stop_type(a_data);
+	f_make_shape(a_data);
+	//路線図用の補完
+
+}
+
+
+function f_make_bmd(a_data, a_bmd) {
+	//リセット
+	a_bmd["stops"] = [];//仮に残っている
+	a_bmd["ur_stops"] = [];
+	a_bmd["parent_stations"] = [];
+	a_bmd["ur_routes"] = [];
+	a_bmd["calendar"] = [];
+	a_bmd["trips"] = [];
+	let i1 = 0;//とりあえず1ファイルのみ対応
+	if (i1 === 0) {
+		if (a_data[i1]["stop_times"] === undefined) {//json由来
+			const c_bmd_temp = f_make_bmd_from_gtfs(a_data[i1]);
+			a_bmd["stops"] = a_bmd["stops"].concat(c_bmd_temp["ur_stops"]).concat(c_bmd_temp["parent_stations"]);//仮に残っている
+			//a_bmd["ur_stops"] = a_bmd["ur_stops"].concat(c_bmd_temp["ur_stops"]);
+			//a_bmd["parent_stations"] = a_bmd["parent_stations"].concat(c_bmd_temp["parent_stations"]);
+			a_bmd["ur_routes"] = a_bmd["ur_routes"].concat(a_data[i1]["ur_routes"]);
+			a_bmd["calendar"] = a_bmd["calendar"].concat(c_bmd_temp["calendar"]);
+			//a_bmd["trips"] = a_bmd["trips"].concat(c_bmd_temp["trips"]);
+		} else {//gtfs由来
+			const c_bmd_temp = f_make_bmd_from_gtfs(a_data[i1]);
+			a_bmd["stops"] = a_bmd["stops"].concat(c_bmd_temp["ur_stops"]).concat(c_bmd_temp["parent_stations"]);//仮に残っている
+			a_bmd["ur_stops"] = a_bmd["ur_stops"].concat(c_bmd_temp["ur_stops"]);
+			a_bmd["parent_stations"] = a_bmd["parent_stations"].concat(c_bmd_temp["parent_stations"]);
+			a_bmd["ur_routes"] = a_bmd["ur_routes"].concat(c_bmd_temp["ur_routes"]);
+			a_bmd["calendar"] = a_bmd["calendar"].concat(c_bmd_temp["calendar"]);
+			a_bmd["trips"] = a_bmd["trips"].concat(c_bmd_temp["trips"]);
+		}
+	}
+	console.log(a_bmd);
+}
+
+
+//元データの段階では、ur_stopsのみ、parent_stationのみ、両方の3択
+//基本はur_stopsのみでparent_stationsは平均をとって自動生成
+//過去のur_stopsがわからない場合はparent_stationsのみ
+//標柱の区別はplatform_codeを用いる（上り・下り、路線等の区分、乗場番号等）
+//同名停留所があるときの区別語（地域名、路線名等）をどうするか？distinction_code？
+
+//統合はstop_nameで行う（緯度経度から位置を確認すべきか？）
+//親も一応用意する
+
+
+
+
+function f_make_bmd_from_gtfs(a_data_i1) {
+	const c_bmd_i1 = {"ur_stops": [], "parent_stations": [], "trips": [], "ur_routes": [], "calendar": []};
+	//[1]calendar
+	for (let i2 = 0; i2 < a_data_i1["calendar"].length; i2++) {
+		const c_service = a_data_i1["calendar"][i2];
+		c_bmd_i1["calendar"].push({
+			"service_id": c_service["service_id"],
+			"monday": c_service["monday"],
+			"tuesday": c_service["tuesday"],
+			"wednesday": c_service["wednesday"],
+			"thursday": c_service["thursday"],
+			"friday": c_service["friday"],
+			"saturday": c_service["saturday"],
+			"sunday": c_service["sunday"],
+			"start_date": c_service["start_date"],
+			"end_date": c_service["end_date"]//,
+		});
+	}
+	//[2]ur_stops
+	//ur_stopをまとめる（ur_stopは標柱も親未設定の停留所の代表点もありうる）
+	for (let i2 = 0; i2 < a_data_i1["stops"].length; i2++) {
+		const c_stop = a_data_i1["stops"][i2];
+		const c_location_type = c_stop["location_type"];
+		if (c_location_type === "0" || c_location_type === "" || c_location_type === undefined) {//ur_stop
+			c_bmd_i1["ur_stops"].push({
+				"stop_id": c_stop["stop_id"],
+				//"stop_code": c_stop["stop_code"],
+				"stop_name": c_stop["stop_name"],
+				//"stop_desc": c_stop["stop_desc"],
+				"stop_lat": c_stop["stop_lat"],
+				"stop_lon": c_stop["stop_lon"],
+				//"zone_id": c_stop["zone_id"],
+				//"stop_url": c_stop["stop_url"],
+				"location_type": "0",//仮に残す
+				"parent_station": c_stop["parent_station"],
+				//"stop_timezone": c_stop["stop_timezone"],
+				//"wheelchair_boarding": c_stop["wheelchair_boarding"]//,
+				"platform_code": c_stop["platform_code"]//,
+			});
+		}
+	}
+	//[3]parent_stations
+	//親をつくる
+	//親が未設定の場合に、stop_nameを設定する
+	for (let i2 = 0; i2 < c_bmd_i1["ur_stops"].length; i2++) {
+		const c_ur_stop = c_bmd_i1["ur_stops"][i2];
+		if (c_ur_stop["parent_station"] === "" || c_ur_stop["parent_station"] === undefined) {
+			c_ur_stop["parent_station"] = c_ur_stop["stop_name"];//stop_nameで代用する
+		}
+	}
+	//親の一覧を作る
+	//親の緯度経度は子達の相加平均とするため、和を計算する
+	const c_parent_station_list = {};
+	for (let i2 = 0; i2 < c_bmd_i1["ur_stops"].length; i2++) {
+		const c_ur_stop = c_bmd_i1["ur_stops"][i2];
+		const c_parent_station = c_ur_stop["parent_station"];
+		if (c_parent_station_list[c_parent_station] === undefined) {
+			c_parent_station_list[c_parent_station] = {"stop_lat": 0, "stop_lon": 0, "children_number" : 0};
+		}
+		c_parent_station_list[c_parent_station]["stop_lat"] += c_ur_stop["stop_lat"];
+		c_parent_station_list[c_parent_station]["stop_lon"] += c_ur_stop["stop_lon"];
+		c_parent_station_list[c_parent_station]["children_number"] += 1;
+
+	}
+	//緯度経度の和から平均を計算
+	for (let i2 in c_parent_station_list) {
+		const c_inverse_number = 1 / c_parent_station_list[i2]["children_number"];
+		c_parent_station_list[i2]["stop_lat"] *= c_inverse_number;
+		c_parent_station_list[i2]["stop_lon"] *= c_inverse_number;
+	}
+	//stop_idの目次を作る
+	const c_stop_id_index = {};
+	for (let i2 = 0; i2 < a_data_i1["stops"].length; i2++) {
+		const c_stop = a_data_i1["stops"][i2];
+		c_stop_id_index[c_stop["stop_id"]] = a_data_i1["stops"][i2];
+	}
+	//parent_stationsを作る
+	for (let i2 in c_parent_station_list) {
+		if (c_stop_id_index[i2] === undefined) {//元データにないとき
+			c_bmd_i1["parent_stations"].push({
+				"stop_id": i2,
+				//"stop_code": "",
+				"stop_name": i2,
+				//"stop_desc": "",
+				"stop_lat": c_parent_station_list[i2]["stop_lat"],
+				"stop_lon": c_parent_station_list[i2]["stop_lon"],
+				//"zone_id": "",
+				//"stop_url": "",
+				"location_type": "1",//仮に残す
+				"parent_station": ""//,//仮に残す
+				//"stop_timezone": "",
+				//"wheelchair_boarding": "",
+				//"platform_code": ""//,
+			});
+		} else {//元データにあるとき
+			c_bmd_i1["parent_stations"].push({
+				"stop_id": i2,
+				//"stop_code": c_stop_id_index[i2]["stop_code"],
+				"stop_name": c_stop_id_index[i2]["stop_name"],
+				//"stop_desc": c_stop_id_index[i2]["stop_desc"],
+				"stop_lat": c_stop_id_index[i2]["stop_lat"],
+				"stop_lon": c_stop_id_index[i2]["stop_lon"],
+				//"zone_id": c_stop_id_index["zone_id"],
+				//"stop_url": c_stop_id_index["stop_url"],
+				"location_type": "1",//仮に残す
+				"parent_station": ""//,//仮に残す
+				//"stop_timezone": c_stop_id_index["stop_timezone"],
+				//"wheelchair_boarding": c_stop_id_index["wheelchair_boarding"],
+				//"platform_code": c_stop_id_index["platform_code"]//,
+			});
+		}
+	}
+	if (a_data_i1["stop_times"] === undefined) {
+		//stop_index（stop_number）を追加（互換性のため）
+		const c_stop_number = {};
+		for (let i2 = 0; i2 < c_bmd_i1["ur_stops"].length; i2++) {
+			c_stop_number["stop_id_" + c_bmd_i1["ur_stops"][i2]["stop_id"]] = i2;
+		}
+		for (let i2 = 0; i2 < c_bmd_i1["trips"].length; i2++) {
+			for (let i3 = 0; i3 < c_bmd_i1["trips"][i2]["stop_times"].length; i3++) {
+				c_bmd_i1["trips"][i2]["stop_times"][i3]["stop_number"] = c_stop_number["stop_id_" + c_bmd_i1["trips"][i2]["stop_times"][i3]["stop_id"]];
+			}
+		}
+		for (let i2 = 0; i2 < c_bmd_i1["ur_routes"].length; i2++) {
+			for (let i3 = 0; i3 < c_bmd_i1["ur_routes"][i2]["stop_array"].length; i3++) {
+				c_bmd_i1["ur_routes"][i2]["stop_array"][i3]["stop_number"] = c_stop_number["stop_id_" + c_bmd_i1["ur_routes"][i2]["stop_array"][i3]["stop_id"]];
+			}
+		}
+		return c_bmd_i1;
+	}
+	//[4]trips
+	for (let i2 = 0; i2 < a_data_i1["trips"].length; i2++) {
+		const c_trip = {"stop_times": [], "shapes": []};
+		for (let i3 in a_data_i1["trips"][i2]) {
+			c_trip[i3] = a_data_i1["trips"][i2][i3];
+		}
+		c_bmd_i1["trips"].push(c_trip);
+	}
+	//stop_timesをtripsにまとめる。
+	const c_index = {}; //全体で使う目次
+	for (let i2 = 0; i2 < c_bmd_i1["trips"].length; i2++) {
+		c_index["trip_id_" + c_bmd_i1["trips"][i2]["trip_id"]] = c_bmd_i1["trips"][i2];
+	}
+	for (let i2 = 0; i2 < a_data_i1["stop_times"].length; i2++) {
+		const c_stop_time = {};
+		for (let i3 in a_data_i1["stop_times"][i2]) {
+			c_stop_time[i3] = a_data_i1["stop_times"][i2][i3];
+		}
+		
+		if (c_index["trip_id_" + c_stop_time["trip_id"]] === undefined) {
+			console.log(c_stop_time["trip_id"]);
+console.log(c_stop_time);
+console.log(i2);
+console.log(a_data_i1["stop_times"]);
+			c_index["trip_id_" + c_stop_time["trip_id"]] = {"stop_times": []};
+		}
+		c_index["trip_id_" + c_stop_time["trip_id"]]["stop_times"].push(c_stop_time);
+	}
+	//並び替え
+	for (let i2 = 0; i2 < c_bmd_i1["trips"].length; i2++) {
+		c_bmd_i1["trips"][i2]["stop_times"].sort(function(a1,a2) {
+			if (a1["stop_sequence"] < a2["stop_sequence"]) {
+				return -1;
+			}
+			if (a1["stop_sequence"] > a2["stop_sequence"]) {
+				return 1;
+			}
+			return 0;
+		});
+	}
+	//c_shape_index
+	const c_shape_index = {};
+	for (let i2 = 0; i2 < a_data_i1["shapes"].length; i2++) {
+		c_shape_index["shape_id_" + a_data_i1["shapes"][i2]["shape_id"]] = [];
+	}
+	for (let i2 = 0; i2 < a_data_i1["shapes"].length; i2++) {
+		const c_shape = {};
+		for (let i3 in a_data_i1["shapes"][i2]) {
+			c_shape[i3] = a_data_i1["shapes"][i2][i3];
+		}
+		c_shape_index["shape_id_" + c_shape["shape_id"]].push(c_shape);
+	}
+	//並び替え
+	for (let i2 in c_shape_index) {
+		c_shape_index[i2].sort(function(a1,a2) {
+			if (a1["shape_pt_sequence"] < a2["shape_pt_sequence"]) {
+				return -1;
+			}
+			if (a1["shape_pt_sequence"] > a2["shape_pt_sequence"]) {
+				return 1;
+			}
+			return 0;
+		});
+	}
+	//shapesをtripsにまとめる。
+	for (let i2 = 0; i2 < c_bmd_i1["trips"].length; i2++) {
+		const c_shapes = c_shape_index["shape_id_" + c_bmd_i1["trips"][i2]["shape_id"]];
+		for (let i3 = 0; i3 < c_shapes.length; i3++) {
+			const c_shape = {};
+			for (let i4 in c_shapes[i3]) {
+				c_shape[i4] = c_shapes[i3][i4];
+			}
+			c_bmd_i1["trips"][i2]["shapes"].push(c_shape);
+		}
+	}
+	//[5]ur_routes
+	//ur_routesをつくる
+	const c_route_index = {};
+	for (let i2 = 0; i2 < a_data_i1["routes"].length; i2++) {
+		c_route_index["route_id_" + a_data_i1["routes"][i2]["route_id"]] = a_data_i1["routes"][i2];
+	}
+	for (let i2 = 0; i2 < c_bmd_i1["trips"].length; i2++) {
+		const c_trip = c_bmd_i1["trips"][i2];
+		//既に同じur_routeがあるか探す。
+		let l_exist = false; //違うと仮定
+		for (let i3 = 0; i3 < c_bmd_i1["ur_routes"].length; i3++) {
+			const c_ur_route = c_bmd_i1["ur_routes"][i3];
+			if (c_ur_route["route_id"] !== c_trip["route_id"] || c_ur_route["stop_array"].length !== c_trip["stop_times"].length || c_ur_route["shape_pt_array"].length !== c_trip["shapes"].length) {
+				continue; //違う
+			}
+			l_exist = true; //同じと仮定
+			for (let i4 = 0; i4 < c_ur_route["stop_array"].length; i4++) {
+				if(c_ur_route["stop_array"][i4]["stop_id"] !== c_trip["stop_times"][i4]["stop_id"] || c_ur_route["stop_array"][i4]["pickup_type"] !== c_trip["stop_times"][i4]["pickup_type"] || c_ur_route["stop_array"][i4]["drop_off_type"] !== c_trip["stop_times"][i4]["drop_off_type"]) {
+					l_exist = false; //違う
+					break;
+				}
+			}
+			for (let i4 = 0; i4 < c_ur_route["shape_pt_array"].length; i4++) {
+				if(c_ur_route["shape_pt_array"][i4]["shape_pt_lat"] !== c_trip["shapes"][i4]["shape_pt_lat"] || c_ur_route["shape_pt_array"][i4]["shape_pt_lon"] !== c_trip["shapes"][i4]["shape_pt_lon"]) {
+					l_exist = false; //違う
+					break;
+				}
+			}
+			if (l_exist === true) { //同じものが見つかったとき
+				c_trip["ur_route_id"] = c_ur_route["ur_route_id"];
+				let l_exist_2 = false;
+				for (let i4 = 0; i4 < c_ur_route["service_array"].length; i4++) {
+					if (c_ur_route["service_array"][i4]["service_id"] === c_trip["service_id"]) {
+						c_ur_route["service_array"][i4]["number"] += 1;
+						l_exist_2 = true;
+					}
+				}
+				if (l_exist_2 === false) {
+					c_ur_route["service_array"].push({
+						"service_id": c_trip["service_id"]
+						, "number": 1
+					});
+				}
+				break;
+			}
+		}
+		if (l_exist === false) { //見つからないとき
+			c_trip["ur_route_id"] = "ur_route_id_" + String(i2);
+			const c_ur_route = {"ur_route_id": "ur_route_id_" + String(i2), "stop_array": [], "shape_pt_array": [], "service_array": [{"service_id": c_trip["service_id"], "number": 1}]};
+			for (let i3 in c_route_index["route_id_" + c_trip["route_id"]]) {
+				c_ur_route[i3] = c_route_index["route_id_" + c_trip["route_id"]][i3];
+			}
+			for (let i3 = 0; i3 < c_trip["stop_times"].length; i3++) {
+				c_ur_route["stop_array"].push({
+					"stop_id": c_trip["stop_times"][i3]["stop_id"]
+					, "pickup_type": c_trip["stop_times"][i3]["pickup_type"]
+					, "drop_off_type": c_trip["stop_times"][i3]["drop_off_type"]
+				});
+			}
+			for (let i3 = 0; i3 < c_trip["shapes"].length; i3++) {
+				const c_shape = {};
+				for (let i4 in c_trip["shapes"][i3]) {
+					c_shape[i4] = c_trip["shapes"][i3][i4];
+				}
+				c_ur_route["shape_pt_array"].push(c_shape);
+			}
+			c_bmd_i1["ur_routes"].push(c_ur_route);
+		}
+	}
+	//並び替え
+	const c_route_number = {};
+	for (let i2 = 0; i2 < a_data_i1["routes"].length; i2++) {
+		c_route_number["route_id_" + a_data_i1["routes"][i2]["route_id"]] = i2;
+	}
+	c_bmd_i1["ur_routes"].sort(function(a1,a2) {
+		if (c_route_number["route_id_" + a1["route_id"]] < c_route_number["route_id_" + a2["route_id"]]) {
+			return -1;
+		}
+		if (c_route_number["route_id_" + a1["route_id"]] > c_route_number["route_id_" + a2["route_id"]]) {
+			return 1;
+		}
+		return 0;
+	});
+	
+	//stop_index（stop_number）を追加（互換性のため）
+	const c_stop_number = {};
+	for (let i2 = 0; i2 < c_bmd_i1["ur_stops"].length; i2++) {
+		c_stop_number["stop_id_" + c_bmd_i1["ur_stops"][i2]["stop_id"]] = i2;
+	}
+	for (let i2 = 0; i2 < c_bmd_i1["trips"].length; i2++) {
+		for (let i3 = 0; i3 < c_bmd_i1["trips"][i2]["stop_times"].length; i3++) {
+			c_bmd_i1["trips"][i2]["stop_times"][i3]["stop_number"] = c_stop_number["stop_id_" + c_bmd_i1["trips"][i2]["stop_times"][i3]["stop_id"]];
+		}
+	}
+	for (let i2 = 0; i2 < c_bmd_i1["ur_routes"].length; i2++) {
+		for (let i3 = 0; i3 < c_bmd_i1["ur_routes"][i2]["stop_array"].length; i3++) {
+			c_bmd_i1["ur_routes"][i2]["stop_array"][i3]["stop_number"] = c_stop_number["stop_id_" + c_bmd_i1["ur_routes"][i2]["stop_array"][i3]["stop_id"]];
+		}
+	}
+	return c_bmd_i1;
+}
 
 
 
@@ -277,54 +1025,6 @@ function f_open(a_bmd, a_settings) {
 
 
 
-//colorが未設定のところを補充する。
-function f_color_gtfs(a_data) {
-	for (let i1 = 0; i1 < a_data["routes"].length; i1++) {
-		if ((a_data["routes"][i1]["route_color"] === "") || (a_data["routes"][i1]["route_color"] === undefined)) {
-			//カラーバリアフリー
-			//const c_red = Math.round((Math.random() * 15)).toString(16) + Math.round((Math.random() * 15)).toString(16);
-			//const c_green = c_red;
-			//const c_blue = Math.round((Math.random() * 15)).toString(16) + Math.round((Math.random() * 15)).toString(16);
-			//a_data["routes"][i1]["route_color"] = c_red + c_green + c_blue;
-			//完全ランダム
-			a_data["routes"][i1]["route_color"] = Math.round((Math.random() * 15)).toString(16) + "F" + Math.round((Math.random() * 15)).toString(16) + "F" + Math.round((Math.random() * 15)).toString(16) + "F"; //本来はFFFFFF
-			
-			//青黄10色から選択。
-			//const c_colors = ["8080FF", "4040FF", "0000FF", "0000C0", "000080", "FFFF80", "FFFF40", "FFFF00", "C0C000", "808000"];
-			//a_data["routes"][i1]["route_color"] = c_colors[Math.round(Math.random() * 10)];
-			
-			
-		}
-		if ((a_data["routes"][i1]["route_text_color"] === "") || (a_data["routes"][i1]["route_text_color"] === undefined)) {
-			a_data["routes"][i1]["route_text_color"] = "000000";
-		}
-	}
-}
-
-
-function f_make_shape(a_data) {
-	if (a_data["shapes"].length !== 0) {
-		return a_data;
-	}
-	const c_shapes = [];
-	for (let i1 = 0; i1 < a_data["stop_times"].length; i1++) {
-		for (let i2 = 0; i2 < a_data["stops"].length; i2++) {
-			if (a_data["stop_times"][i1]["stop_id"] === a_data["stops"][i2]["stop_id"]) {
-				c_shapes.push({
-					"shape_id": "shape_id_" + a_data["stop_times"][i1]["trip_id"]
-					, "shape_pt_lat": a_data["stops"][i2]["stop_lat"]
-					, "shape_pt_lon": a_data["stops"][i2]["stop_lon"]
-					, "shape_pt_sequence": a_data["stops"][i2]["stop_sequence"]
-				});
-				break;
-			}
-		}
-	}
-	for (let i1 = 0; i1 < a_data["trips"].length; i1++) {
-		a_data["trips"][i1]["shape_id"] = "shape_id_" + a_data["trips"][i1]["trip_id"]
-	}
-	a_data["shapes"] = c_shapes;
-}
 
 
 
@@ -1066,7 +1766,7 @@ function f_topology(a_data, a_settings) {
 	//f_trip_number(a_data);
 	//parent_routesをつくる。
 	const c_parent_route_id = a_settings["parent_route_id"];//このidで統合する。
-	const c_parent_routes = [];
+	c_parent_routes = [];
 	for (let i1 = 0; i1 < a_data["ur_routes"].length; i1++) {
 		//parent_route_idに設定したい識別子を追加する。
 		a_data["ur_routes"][i1]["parent_route_id"] = a_data["ur_routes"][i1][c_parent_route_id];
@@ -1157,7 +1857,7 @@ function f_topology(a_data, a_settings) {
 	
 	//リセット
 	for (let i1 = 0; i1 < a_data["shape_segments"].length; i1++) {
-		a_data["shape_segments"][i1]["parent_routes"] = [];
+		c_shape_segment = a_data["shape_segments"][i1]["parent_routes"] = [];
 	}
 	
 	//parent_shape_segmentで最大のwidthをまとめる
@@ -2449,7 +3149,7 @@ function f_leaflet(a_data, a_settings) {
 	
 	//初期の表示位置をsvgの左上、ズームレベルc_zoom_levelに設定する。
 	//SVGの挿入位置と初期倍率に関係する？
-	l_map.setView(c_top_left, c_zoom_level);
+	map.setView(c_top_left, c_zoom_level);
 	
 	//背景地図を半透明にする。
 	if (a_settings["background_map"] === true) {//透明にせず、半透明にする
@@ -2487,9 +3187,9 @@ function f_leaflet(a_data, a_settings) {
 	
 	
 	//拡大縮小したときにsvg地図がずれないようにする。
-	l_map.on("zoom", f_zoom);
+	map.on("zoom", f_zoom);
 	function f_zoom() {
-		c_svg_g.setAttribute("transform", "translate(" + l_map.latLngToLayerPoint([85.05112878, 0]).x + ", " + l_map.latLngToLayerPoint([85.05112878, 0]).y + ") scale(" + (2 ** (l_map.getZoom() - c_zoom_level)) + ")");
+		c_svg_g.setAttribute("transform", "translate(" + map.latLngToLayerPoint([85.05112878, 0]).x + ", " + map.latLngToLayerPoint([85.05112878, 0]).y + ") scale(" + (2 ** (map.getZoom() - c_zoom_level)) + ")");
 		setTimeout(f_zoom_2, 0);
 	}
 	
@@ -2497,7 +3197,7 @@ function f_leaflet(a_data, a_settings) {
 		for (let i1 = 0; i1 <= a_settings["svg_zoom_ratio"]; i1++) {
 			document.getElementById("g_zoom_" + String(i1)).setAttribute("visibility","hidden");
 		}
-		const c_svg_zoom_ratio = c_zoom_level - l_map.getZoom();
+		const c_svg_zoom_ratio = c_zoom_level - map.getZoom();
 		if (c_svg_zoom_ratio <= 0) {
 			document.getElementById("g_zoom_0").setAttribute("visibility","visible");
 		} else if (c_svg_zoom_ratio <= a_settings["svg_zoom_ratio"]) {
@@ -2509,13 +3209,13 @@ function f_leaflet(a_data, a_settings) {
 	
 	
 	//初期の表示位置を調整。（中心に）
-	l_map.setView(c_center, c_zoom_level);
+	map.setView(c_center, c_zoom_level);
 	f_zoom();
 	
 	
 	
 	//クリックした点の緯度経度取得
-	l_map.on("click", f_click);
+	map.on("click", f_click);
 	function f_click(a1) {
 		const c_lng = a1.latlng.lng;//経度
 		const c_lat = a1.latlng.lat;//緯度
