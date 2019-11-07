@@ -1,4 +1,4 @@
-import {Polyline} from "leaflet";
+import {CircleMarker, LatLng, LatLngExpression, Point, Polyline} from "leaflet";
 
 export class Service{
     public service_id="";
@@ -55,23 +55,26 @@ export class ApiStation{
     public lon:number=0;
 }
 export class ApiRoute{
-    public stationList:Array<String>=[];
+    public stationList:Array<string>=[];
     public name:string="";
     public color:string="";
     public id:string="";
     public l_polyline:Polyline=null;
-    public polyline=null;
-    public l_points=null;
-    public points=null;
-
+    public polyline:LatLng[]=[];
+    public l_points:CircleMarker[]=null;
+    public points:Point2[]=null;
 }
-export class Route{
-    public route_id="";
-    public stop_array:Stop[]=[];
-    public shape_pt_array=[];
-    public ur_route_id:string="";
-    public service_array=[];
+export class Point2{
+    public id="";
+    public latlon:LatLng=null;
 }
+// export class Route{
+//     public route_id="";
+//     public stop_array:Stop[]=[];
+//     public shape_pt_array=[];
+//     public ur_route_id:string="";
+//     public service_array=[];
+// }
 
 export class Calendar{
     public service_id:string="";

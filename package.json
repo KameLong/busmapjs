@@ -1,0 +1,22 @@
+{
+  "name": "tstutorial",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/trarepo_map.ts",
+  "scripts": {
+    "tsc": "tsc",
+    "build": "webpack"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-loader": "^4.5.0",
+    "typescript": "^2.9.2",
+    "webpack": "^4.41.2",
+    "webpack-cli": "^3.3.10"
+  },
+  "dependencies": {
+    "@types/leaflet": "^1.5.5",
+    "leaflet": "^1.5.1"
+  }
+}

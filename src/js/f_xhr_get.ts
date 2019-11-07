@@ -1,12 +1,11 @@
-import {ApiRoute, ApiStation, Route} from "./a_hanyou";
+import {ApiRoute, ApiStation} from "./a_hanyou";
 
-export class KLAPI{
+export class KLAPI {
 	public route:{[key:string]:ApiRoute}={};
 	public station:{[key:string]:ApiStation}={};
 
 }
-export function f_xhr_get(a_url:string, a_type:XMLHttpRequestResponseType):KLAPI {
-
+export function f_xhr_get(a_url:string, a_type:XMLHttpRequestResponseType):Promise<KLAPI>{
 	return new Promise<KLAPI>((resolve, reject) => {
 		function f_reject() {
 			reject(new Error("XHR失敗"));
@@ -17,7 +16,12 @@ export function f_xhr_get(a_url:string, a_type:XMLHttpRequestResponseType):KLAPI
 		c_xhr.onloadend = ()=>{
 			console.log(c_xhr);
 			if (c_xhr.status === 200) {
-				resolve(c_xhr.response as KLAPI);
+				const res=c_xhr.response;
+				console.log(res);
+				const kl=res as KLAPI;
+				console.log(kl);
+
+				resolve(kl);
 			} else {
 				f_reject();
 			}
